@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Copy and install dependencies
-COPY requirements.txt ./
+COPY Deployment/requirements.txt ./
 
 # Update pip
 # Install PyTorch CPU first to avoid large CUDA packages
@@ -23,13 +23,13 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY src/ ./src/
 
 # Copy ml-100k-dataset if it's needed at runtime
-COPY ml-100k-dataset/ ./ml-100k-dataset/
+COPY Dataset/ml-100k-dataset/ ./ml-100k-dataset/
 
 # Change to src directory so api.py paths are relative to there
 WORKDIR /app/src
 
-# Expose port 8080
-EXPOSE 8080
+# Expose port 8000
+EXPOSE 8000
 
 # Command to run the FastAPI application
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
