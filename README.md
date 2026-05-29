@@ -54,7 +54,7 @@ The MovieLens 100K dataset released in April 1998 was used to train the demo mod
 1. Open a shell.
 2. Clone the git repository.
 ```
-git clone https://github.com/lithiumizcoolz/movie-recommender.git
+git clone https://github.com/lim-li-xuan-phy/movie-recommender.git
 ```
 
 3. Navigate to the downloaded repository and build the Docker image.
@@ -79,7 +79,7 @@ While the demo model is trained on the MovieLens 100K dataset (100K ratings, 1.7
 
 **2. Clone the git repository**
 ```
-git clone https://github.com/lithiumizcoolz/movie-recommender.git
+git clone https://github.com/lim-li-xuan-phy/movie-recommender.git
 ```
 
 **3. Create virtual environment**
