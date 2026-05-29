@@ -1,124 +1,231 @@
 """
-Movie recommender built on Two-Tower model
-Program is written for MovieLens 100K movie ratings dataset published in 1998, but you can replace it with your own dataset.
+Movie recommender built on Two-Tower model.
+Program supports MovieLens 100K and MovieLens Latest datasets, up to ~100K movie ratings.
 """
 
+import os
+import sys
+import pickle
+import argparse
 import pandas as pd
-from sklearn.model_selection import train_test_split
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
-from torch.utils.data import Dataset, DataLoader
+from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader
 
-# Get the MovieLens 100K dataset. You can input your own dataset here. 
-columns = ['user_id', 'item_id', 'rating', 'timestamp']
-df = pd.read_csv('../ml-100k-dataset/u.data', sep='\t', names=columns)
+# Handle import when run from root or from src/
+try:
+    from src.classes import torch_parse, TwoTowerModel
+except ImportError:
+    from classes import torch_parse, TwoTowerModel
 
-# Define the number of epochs of the model training (`epochs`) and the threshold of early stopping to prevent overfitting (`patience`).
-epochs = 30
-patience = 3 # Stop training if validation loss doesn't improve for 3 consecutive epochs
+def main():
+    parser = argparse.ArgumentParser(description="Train Two-Tower Movie Recommender Model")
+    parser.add_argument("--dataset", type=str, default="ml-100k", choices=["ml-100k", "ml-latest-small", "ml-latest"], help="Dataset to train on. Default = ml-100k")
+    parser.add_argument("--epochs", type=int, default=100, help="Number of training epochs. Default = 100")
+    parser.add_argument("--patience", type=int, default=3, help="Early stopping patience. Default = 3")
+    parser.add_argument("--batch-size", type=int, default=256, help="Batch size for training. Default = 256")
+    parser.add_argument("--sample-fraction", type=float, default=1.0, help="Fraction of the dataset to use for training (useful for large datasets). Default = 1.0")
+    args = parser.parse_args()
 
-# Remove rows with missing values in-place
-df.dropna(inplace=True)
+    # Setup paths relative to the script location
+    SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+    DATASET_DIR = os.path.abspath(os.path.join(SRC_DIR, "..", "Dataset"))
+    ARTIFACTS_DIR = os.path.join(SRC_DIR, "artifacts")
+    os.makedirs(ARTIFACTS_DIR, exist_ok=True)
 
-# Map user and item IDs to contiguous indices
-user_to_idx = {uid: idx for idx, uid in enumerate(df['user_id'].unique())}
-item_to_idx = {iid: idx for idx, iid in enumerate(df['item_id'].unique())}
-
-idx_to_user = {idx: uid for uid, idx in user_to_idx.items()}
-idx_to_item = {idx: iid for iid, idx in item_to_idx.items()}
-
-num_users = len(user_to_idx)
-num_items = len(item_to_idx)
-
-df['user_idx'] = df['user_id'].map(user_to_idx)
-df['item_idx'] = df['item_id'].map(item_to_idx)
-
-# Training/validation/test sets (80-10-10 split)
-train, temp = train_test_split(df, test_size=0.2)
-val, test = train_test_split(temp, test_size=0.5)
-
-# Targets are the positive samples, which we define as ratings >= 3.
-train_pos = train[train['rating'] >= 3].copy()
-val_pos = val[val['rating'] >= 3].copy()
-test_pos = test[test['rating'] >= 3].copy()
-
-# Track all interactions of the training set for negative sampling 
-user_rated_items = train.groupby('user_idx')['item_idx'].apply(set).to_dict()
-
-# Set up PyTorch tensors
-class torch_parse(Dataset):
-    def __init__(self, df_pos, num_items, user_rated_items, num_negatives=4, is_training=True):
-        self.df_pos = df_pos.reset_index(drop=True)
-        self.num_items = num_items
-        self.user_rated_items = user_rated_items
-        self.num_negatives = num_negatives
-        self.is_training = is_training
-        
-        self.users = self.df_pos['user_idx'].values
-        self.items = self.df_pos['item_idx'].values
-        
-    def __len__(self):
-        if self.is_training:
-            # Generate 1 positive slot + `num_negatives=4` negative slots for every positive interaction. 
-            # The positive/negative slots will store positive/negative samples later.
-            return len(self.df_pos) * (1 + self.num_negatives)
-        return len(self.df_pos)
+    print(f"Loading {args.dataset} dataset...")
     
-    def __getitem__(self, idx):
-        if self.is_training:
-            # `idx=0`is positive slot, `idx=1` to `idx=4` are negative slots. and repeat every 5 slots.
-            pos_idx = idx // (1 + self.num_negatives)
-            is_neg = (idx % (1 + self.num_negatives)) > 0
-            
-            user = self.users[pos_idx] # Get the user who made the positive interaction.
-            
-            if not is_neg: # If this slot is positive
-                item = self.items[pos_idx] # Use the movie that this user rated
-                label = 1.0 # 1 means liked
-            else: # This is a negative slot
-                # Use a random movie that the user has not rated
-                rated_set = self.user_rated_items.get(user, set())
-                neg_item = np.random.randint(0, self.num_items)
-                while neg_item in rated_set: # Keep retrying the random picking of a negative sample until you get an unrated movie
-                    neg_item = np.random.randint(0, self.num_items)
-                item = neg_item
-                label = 0.0 # 0 means disliked
-                
-            return torch.tensor(user, dtype=torch.long), torch.tensor(item, dtype=torch.long), torch.tensor(label, dtype=torch.float32)
+    if args.dataset == "ml-100k":
+        columns = ['user_id', 'item_id', 'rating', 'timestamp']
+        data_path = os.path.join(DATASET_DIR, "ml-100k", "u.data")
+        if not os.path.exists(data_path):
+            print(f"Error: Dataset file not found at {data_path}")
+            sys.exit(1)
+        df = pd.read_csv(data_path, sep='\t', names=columns)
+        
+        # Load Movie Titles
+        item_cols = ['movie_id', 'movie_title', 'release_date', 'video_release_date', 'IMDb_URL', 
+                     'unknown', 'Action', 'Adventure', 'Animation', 'Childrens', 'Comedy', 'Crime', 
+                     'Documentary', 'Drama', 'Fantasy', 'Film-Noir', 'Horror', 'Musical', 'Mystery', 
+                     'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western']
+        movies_path = os.path.join(DATASET_DIR, "ml-100k", "u.item")
+        if not os.path.exists(movies_path):
+            print(f"Error: Movie titles file not found at {movies_path}")
+            sys.exit(1)
+        movies_df = pd.read_csv(movies_path, sep='|', names=item_cols, encoding='latin-1')
+        movie_id_to_title = dict(zip(movies_df['movie_id'], movies_df['movie_title']))
+    else:
+        # ml-latest-small or ml-latest
+        if args.dataset == "ml-latest-small":
+            data_path = os.path.join(SRC_DIR, "Dataset", "ml-latest-small", "ratings.csv")
+            movies_path = os.path.join(SRC_DIR, "Dataset", "ml-latest-small", "movies.csv")
         else:
-            user = self.users[idx]
-            item = self.items[idx]
-            return torch.tensor(user, dtype=torch.long), torch.tensor(item, dtype=torch.long), torch.tensor(1.0, dtype=torch.float32)
+            data_path = os.path.join(DATASET_DIR, "ml-latest", "ratings.csv")
+            movies_path = os.path.join(DATASET_DIR, "ml-latest", "movies.csv")
 
-# Create DataLoaders
-train_dataset = torch_parse(train_pos, num_items, user_rated_items, num_negatives=4, is_training=True)
-train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True)
+        if not os.path.exists(data_path):
+            print(f"Error: Dataset file not found at {data_path}")
+            if args.dataset == "ml-latest-small":
+                print("Please run update_data.py --small first to download the dataset.")
+            else:
+                print("Please run update_data.py first to download the dataset.")
+            sys.exit(1)
+        df = pd.read_csv(data_path)
+        # Rename columns to allow compatibility of code with ml-latest and ml-latest-small dataset
+        df.rename(columns={'userId': 'user_id', 'movieId': 'item_id'}, inplace=True)
+        
+        # Load Movie Titles
+        if not os.path.exists(movies_path):
+            print(f"Error: Movie titles file not found at {movies_path}")
+            sys.exit(1)
+        movies_df = pd.read_csv(movies_path)
+        movie_id_to_title = dict(zip(movies_df['movieId'], movies_df['title']))
 
-class TwoTowerModel(nn.Module):
-    def __init__(self, num_users, num_items, embedding_dim=64):
-        super().__init__()
-        # User Tower
-        self.user_embedding = nn.Embedding(num_users, embedding_dim)
-        # Item (Movie) Tower
-        self.item_embedding = nn.Embedding(num_items, embedding_dim)
-        
-        # Initialize embeddings with small random values, sampled from normal distribution, to help convergence
-        nn.init.normal_(self.user_embedding.weight, std=0.01)
-        nn.init.normal_(self.item_embedding.weight, std=0.01)
-        
-    def forward(self, user_indices, item_indices):
-        user_rep = self.user_embedding(user_indices)
-        item_rep = self.item_embedding(item_indices)
-        # Dot product similarity. For each sample, sum the similarity score over all 64 embeddings.
-        scores = torch.sum(user_rep * item_rep, dim=-1)
-        return scores
+    # Randomly sample dataset if sample_fraction is less than 1.0
+    if 0.0 < args.sample_fraction < 1.0:
+        print(f"Sampling {args.sample_fraction * 100:.2f}% of the dataset for faster training...")
+        df = df.sample(frac=args.sample_fraction).reset_index(drop=True)
+
+    # Define training parameters
+    epochs = args.epochs
+    patience = args.patience
+    batch_size = args.batch_size
+
+    # Remove rows with missing values in-place
+    df.dropna(inplace=True)
+
+    # Map user and item IDs to contiguous indices
+    user_to_idx = {uid: idx for idx, uid in enumerate(df['user_id'].unique())}
+    item_to_idx = {iid: idx for idx, iid in enumerate(df['item_id'].unique())}
+
+    idx_to_user = {idx: uid for uid, idx in user_to_idx.items()}
+    idx_to_item = {idx: iid for iid, idx in item_to_idx.items()}
+
+    num_users = len(user_to_idx)
+    num_items = len(item_to_idx)
+
+    df['user_idx'] = df['user_id'].map(user_to_idx)
+    df['item_idx'] = df['item_id'].map(item_to_idx)
+
+    print(f"Dataset has {num_users} users, {num_items} movies, and {len(df)} ratings.")
+
+    # Training/validation/test sets (80-10-10 split)
+    train, temp = train_test_split(df, test_size=0.2)
+    val, test = train_test_split(temp, test_size=0.5)
+
+    # Targets are the positive samples, which we define as ratings >= 3.
+    train_pos = train[train['rating'] >= 3].copy()
+    val_pos = val[val['rating'] >= 3].copy()
+    test_pos = test[test['rating'] >= 3].copy()
+
+    # Track all interactions of the training set for negative sampling 
+    user_rated_items = train.groupby('user_idx')['item_idx'].apply(set).to_dict()
+
+    # Create DataLoaders
+    train_dataset = torch_parse(train_pos, num_items, user_rated_items, num_negatives=4, is_training=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+
+    model = TwoTowerModel(num_users, num_items, embedding_dim=64).to(device)
+    criterion = nn.BCEWithLogitsLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=1e-5)
+
+    # Initial evaluation before training
+    p, r, n = evaluate_retrieval(model, train, test_pos, num_users, num_items, K=10, batch_size=batch_size)
+    print(f"Pre-train metrics - Precision@10: {p:.4f}, Recall@10: {r:.4f}, NDCG@10: {n:.4f}")
+
+    train_losses = []
+    val_losses = []
+    best_val_loss = float('inf')
+    best_model_path = os.path.join(SRC_DIR, 'best_model.pt')
     
-    def get_user_embedding(self, user_indices):
-        return self.user_embedding(user_indices)
+    print(f"Starting training for {epochs} epochs...")
+
+    for epoch in range(epochs):
+        model.train()
+        total_loss = 0.0
+        for users, items, labels in train_loader:
+            users, items, labels = users.to(device), items.to(device), labels.to(device)
+            
+            optimizer.zero_grad()
+            predictions = model(users, items)
+            loss = criterion(predictions, labels)
+            loss.backward()
+            optimizer.step()
+            
+            total_loss += loss.item() * users.size(0)
         
-    def get_item_embedding(self, item_indices):
-        return self.item_embedding(item_indices)
+        avg_loss = total_loss / len(train_dataset)
+        train_losses.append(avg_loss)
+        
+        # Compute validation loss. No gradients needed.
+        model.eval()
+        val_total_loss = 0.0
+        val_count = 0
+        with torch.no_grad():
+            for users, items, labels in DataLoader(
+                torch_parse(val_pos, num_items, user_rated_items, num_negatives=4, is_training=True),
+                batch_size=batch_size
+            ):
+                users, items, labels = users.to(device), items.to(device), labels.to(device)
+                preds = model(users, items)
+                v_loss = criterion(preds, labels)
+                val_total_loss += v_loss.item() * users.size(0)
+                val_count += users.size(0)
+        avg_val_loss = val_total_loss / val_count
+        val_losses.append(avg_val_loss)
+
+        # Run retrieval evaluation on validation set
+        val_p, val_r, val_n = evaluate_retrieval(model, train, val_pos, num_users, num_items, K=10, batch_size=batch_size)
+        print(f"Epoch {epoch+1:02d}/{epochs:02d} | Train Loss: {avg_loss:.4f} | Val Loss: {avg_val_loss:.4f} | Val Precision@10: {val_p:.4f}, Recall@10: {val_r:.4f}, NDCG@10: {val_n:.4f}")
+        
+        # Early stopping
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            epochs_without_improvement = 0
+            torch.save(model.state_dict(), best_model_path)
+        else:
+            epochs_without_improvement += 1
+            
+        if epochs_without_improvement >= patience:
+            print(f"Early stopping at epoch {epoch+1}.")
+            break
+
+    # Restore the best model before evaluation
+    model.load_state_dict(torch.load(best_model_path))
+    print(f"Trained model saved in {best_model_path}.")
+
+    # Final evaluation on test set
+    test_p, test_r, test_n = evaluate_retrieval(model, train, test_pos, num_users, num_items, K=10, batch_size=batch_size)
+    print(f"Final Test Metrics - Precision@10: {test_p:.4f}, Recall@10: {test_r:.4f}, NDCG@10: {test_n:.4f}")
+
+    # From the trained model, save item embeddings only.
+    with torch.no_grad():
+        all_item_indices = torch.arange(num_items, dtype=torch.long).to(device)
+        item_embeddings = model.get_item_embeddings(all_item_indices).cpu()  # (num_items, 64)
+
+    # Save all artifacts
+    print("Saving artifacts...")
+    with open(os.path.join(ARTIFACTS_DIR, "item_to_idx.pkl"), "wb") as f:
+        pickle.dump(item_to_idx, f)
+
+    with open(os.path.join(ARTIFACTS_DIR, "idx_to_item.pkl"), "wb") as f:
+        pickle.dump(idx_to_item, f)
+
+    with open(os.path.join(ARTIFACTS_DIR, "movie_id_to_title.pkl"), "wb") as f:
+        pickle.dump(movie_id_to_title, f)
+
+    torch.save(item_embeddings, os.path.join(ARTIFACTS_DIR, "item_embeddings.pt"))
+
+    print(f"All artifacts saved to {ARTIFACTS_DIR}:")
+    for fname in os.listdir(ARTIFACTS_DIR):
+        size = os.path.getsize(os.path.join(ARTIFACTS_DIR, fname))
+        print(f"  {fname}  ({size:,} bytes)")
+    print("Done! You can now run: uvicorn api:app --reload")
 
 @torch.no_grad()
 def evaluate_retrieval(model, train_df, test_pos_df, num_users, num_items, K=10, batch_size=256):
@@ -130,126 +237,65 @@ def evaluate_retrieval(model, train_df, test_pos_df, num_users, num_items, K=10,
     item_reps = []
     for i in range(0, num_items, batch_size):
         batch_items = item_indices[i:i+batch_size]
-        item_reps.append(model.get_item_embedding(batch_items))
-    item_reps = torch.cat(item_reps, dim=0)
+        item_reps.append(model.get_item_embeddings(batch_items))
+    item_reps = torch.cat(item_reps, dim=0) # (num_items, 64)
     
-    # Pre-compute all user embeddings
-    user_indices = torch.arange(num_users, dtype=torch.long).to(device)
-    user_reps = []
-    for i in range(0, num_users, batch_size):
-        batch_users = user_indices[i:i+batch_size]
-        user_reps.append(model.get_user_embedding(batch_users))
-    user_reps = torch.cat(user_reps, dim=0)
-    
-    # Compute similarity scores
-    all_scores = torch.matmul(user_reps, item_reps.T).cpu().numpy()
-    
-    # Mask out training set items so they aren't recommended
-    train_user_items = train_df.groupby('user_idx')['item_idx'].apply(list).to_dict()
-    for user_idx, item_idxs in train_user_items.items():
-        all_scores[user_idx, item_idxs] = -np.inf
-        
     # Get ground truth positive items from test set
     test_user_pos_items = test_pos_df.groupby('user_idx')['item_idx'].apply(list).to_dict()
+    # Mask out training set items so they aren't recommended
+    train_user_items = train_df.groupby('user_idx')['item_idx'].apply(list).to_dict()
     
+    test_users = list(test_user_pos_items.keys())
+    if len(test_users) == 0:
+        return 0.0, 0.0, 0.0
+        
     precisions = []
     recalls = []
     ndcgs = []
     
-    for user_idx, gt_items in test_user_pos_items.items():
-        if len(gt_items) == 0:
-            continue
+    # Process test users in batches to avoid OOM
+    # We can use a larger batch size compared to training because gradient computations are not needed.
+    eval_batch_size = 1000
+    for start_idx in range(0, len(test_users), eval_batch_size):
+        batch_users = test_users[start_idx:start_idx + eval_batch_size]
+        batch_users_tensor = torch.tensor(batch_users, dtype=torch.long).to(device)
+        
+        # Get embeddings for this batch of users
+        user_reps_batch = model.get_user_embeddings(batch_users_tensor) # (eval_batch_size, 64)
+        
+        # Compute scores for this batch of users against all items
+        # shape: (eval_batch_size, num_items)
+        scores_batch = torch.matmul(user_reps_batch, item_reps.T).cpu().numpy()
+        
+        for i, user_idx in enumerate(batch_users):
+            gt_items = test_user_pos_items[user_idx]
+            if len(gt_items) == 0:
+                continue
+                
+            user_scores = scores_batch[i]
             
-        user_scores = all_scores[user_idx]
-        top_k_indices = np.argsort(user_scores)[::-1][:K]
-        
-        hits = [1 if item in gt_items else 0 for item in top_k_indices]
-        
-        # Precision@K
-        precision = sum(hits) / K
-        precisions.append(precision)
-        
-        # Recall@K
-        recall = sum(hits) / len(gt_items)
-        recalls.append(recall)
-        
-        # NDCG@K
-        idcg = sum([1 / np.log2(idx + 2) for idx in range(min(K, len(gt_items)))]) # Ideal discounted cumulative gain, normalization constant for dcg
-        dcg = sum([hit / np.log2(idx + 2) for idx, hit in enumerate(hits)]) # Discounted cumulative gain
-        ndcg = dcg / idcg if idcg > 0 else 0
-        ndcgs.append(ndcg)
-        
+            # Mask out training set items
+            if user_idx in train_user_items:
+                user_scores[train_user_items[user_idx]] = -np.inf
+                
+            top_k_indices = np.argsort(user_scores)[::-1][:K]
+            hits = [1 if item in gt_items else 0 for item in top_k_indices]
+            
+            # Precision@K
+            precision = sum(hits) / K
+            precisions.append(precision)
+            
+            # Recall@K
+            recall = sum(hits) / len(gt_items)
+            recalls.append(recall)
+            
+            # NDCG@K
+            idcg = sum([1 / np.log2(idx + 2) for idx in range(min(K, len(gt_items)))])
+            dcg = sum([hit / np.log2(idx + 2) for idx, hit in enumerate(hits)])
+            ndcg = dcg / idcg if idcg > 0 else 0
+            ndcgs.append(ndcg)
+            
     return np.mean(precisions), np.mean(recalls), np.mean(ndcgs)
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(f"Using device: {device}")
-
-model = TwoTowerModel(num_users, num_items, embedding_dim=64).to(device)
-criterion = nn.BCEWithLogitsLoss() # BCEWithLogitsLoss is more numerically stable than Sigmoid (converts inputs to probabilities) followed by BCELoss
-optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=1e-5)
-
-# Initial evaluation before training
-p, r, n = evaluate_retrieval(model, train, test_pos, num_users, num_items, K=10)
-print(f"Pre-train metrics - Precision@10: {p:.4f}, Recall@10: {r:.4f}, NDCG@10: {n:.4f}")
-
-train_losses = []
-val_losses = []
-best_val_loss = float('inf')
-print(f"Starting training for {epochs} epochs...")
-
-for epoch in range(epochs):
-    model.train()
-    total_loss = 0.0
-    for users, items, labels in train_loader:
-        users, items, labels = users.to(device), items.to(device), labels.to(device)
-        
-        optimizer.zero_grad()
-        predictions = model(users, items)
-        loss = criterion(predictions, labels)
-        loss.backward()
-        optimizer.step()
-        
-        total_loss += loss.item() * users.size(0)
-    
-    avg_loss = total_loss / len(train_dataset)
-    train_losses.append(avg_loss)
-    
-    # Compute validation loss. No gradients needed.
-    model.eval()
-    val_total_loss = 0.0
-    val_count = 0
-    with torch.no_grad():
-        for users, items, labels in DataLoader(
-            torch_parse(val_pos, num_items, user_rated_items, num_negatives=4, is_training=True),
-            batch_size=256
-        ):
-            users, items, labels = users.to(device), items.to(device), labels.to(device)
-            preds = model(users, items)
-            v_loss = criterion(preds, labels)
-            val_total_loss += v_loss.item() * users.size(0)
-            val_count += users.size(0)
-    avg_val_loss = val_total_loss / val_count
-    val_losses.append(avg_val_loss)
-
-    # Run retrieval evaluation on validation set
-    val_p, val_r, val_n = evaluate_retrieval(model, train, val_pos, num_users, num_items, K=10)
-    print(f"Epoch {epoch+1:02d}/{epochs:02d} | Train Loss: {avg_loss:.4f} | Val Loss: {avg_val_loss:.4f} | Val Precision@10: {val_p:.4f}, Recall@10: {val_r:.4f}, NDCG@10: {val_n:.4f}")
-    
-    # Stop model training the moment model stops improving (ie. validation loss stops decreasing) for `patience` epochs in a row. (known as Early stopping)
-    if avg_val_loss < best_val_loss:
-        best_val_loss = avg_val_loss
-        epochs_without_improvement = 0
-        torch.save(model.state_dict(), 'best_model.pt')  # Save best weights
-    else:
-        epochs_without_improvement += 1
-    if epochs_without_improvement >= patience:
-        print(f"Early stopping at epoch {epoch+1}.")
-        break
-
-# Restore the best model before evaluation
-model.load_state_dict(torch.load('best_model.pt'))
-print("Trained model saved in best_model.pt.")
-
-# Final Evaluation on test set
-test_p, test_r, test_n = evaluate_retrieval(model, train, test_pos, num_users, num_items, K=10)
-print(f"Final Test Metrics - Precision@10: {test_p:.4f}, Recall@10: {test_r:.4f}, NDCG@10: {test_n:.4f}")
+if __name__ == "__main__":
+    main()

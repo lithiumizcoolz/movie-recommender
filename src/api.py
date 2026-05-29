@@ -15,12 +15,13 @@ from typing import Dict
 import numpy as np
 import torch
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-ARTIFACTS_DIR = Path("artifacts")
+ARTIFACTS_DIR = Path(__file__).resolve().parent / "artifacts"
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 TOP_K = 10
 MIN_RATINGS = 5
 
@@ -83,14 +84,20 @@ app = FastAPI(
 )
 
 # Serve static files (the HTML UI) from ./static/
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def serve_ui():
     """Serve the web UI."""
-    html = Path("static/index.html").read_text(encoding="utf-8")
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
     return HTMLResponse(content=html)
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Serve the favicon.ico directly to the url."""
+    return FileResponse(STATIC_DIR / "favicon.png")
 
 
 @app.get("/movies", response_model=list[MovieItem])
@@ -131,15 +138,15 @@ async def recommend(request: RatingRequest):
             detail=f"At least {MIN_RATINGS} of the submitted movies must be in the dataset."
         )
 
-    # ── Cold-start: compute user embedding as weighted average of rated item embeddings
+    # ── Cold-start: compute user embeddings as weighted average of rated item embeddings
     weights = np.array(rating_weights, dtype=np.float32)
     weights /= weights.sum()                              # normalise weights
 
     rated_embs = item_embeddings[rated_indices]           # (num_rated, 64)
-    user_embedding = (weights[:, None] * rated_embs).sum(axis=0)  # (64,)
+    user_embeddings = (weights[:, None] * rated_embs).sum(axis=0)  # (64,)
 
     # ── Score all items
-    scores = item_embeddings @ user_embedding             # (num_items,) dot product
+    scores = item_embeddings @ user_embeddings             # (num_items,) dot product
 
     # ── Mask out movies the user has already rated
     scores[rated_indices] = -np.inf
