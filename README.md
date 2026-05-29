@@ -1,9 +1,9 @@
-![Demo screen recording](document-images/screen-recording.gif)
+![Demo screen recording](assets/screen-recording-short.gif)
 
 # Introduction
 This movie recommender is an application that uses machine learning of movie rating data to offer personalized movie recommendations. It can be automatically deployed with Docker. The architecture of the movie recommender project is as follows:
 
-![Architecture diagram](document-images/pipeline.png)
+![Architecture diagram](assets/pipeline.png)
 
 # Table of Contents
 - [Data source](#data-source)
@@ -26,7 +26,7 @@ The MovieLens 100K dataset released in April 1998 was used to train the demo mod
 
 - **Model - Two-Tower neural network:** The Two-Tower model consists of a user tower and a item (movie) tower. Each tower processes each of their respective features (ie. user and movie IDs) into vectors, known as embeddings, and outputs these embeddings. The similarity score is computed for each user-item pair by taking the dot product of the user embeddings and item embeddings. The model outputs the sum of the similarity scores of all user-item pairs. Embeddings are initialized with small random weights. During training, the loss function calculates the loss from the similarity scores and the optimizer adjusts the weights to optimize the similarity score of each user-item pair towards their true targets (ie. positive or negative interaction).
 
-![Model diagram](document-images/two-tower-diagram.png)
+![Model diagram](assets/two-tower-diagram.png)
 
 
 - **Loss function - Binary cross-entropy (BCE):** Measures the deviation of the model's predicted similarity scores from the true targets. The targets are `1.0` = positive interaction/liked the movie and `0.0` = negative interaction/disliked the movie. A lower BCE loss signals better predictive accuracy of the model. A positive interaction with a low similarity score, or a negative interaction with a high similarity score, will both give a large loss. 
