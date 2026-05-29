@@ -32,7 +32,7 @@ def main():
     # Setup paths relative to the script location
     SRC_DIR = os.path.dirname(os.path.abspath(__file__))
     DATASET_DIR = os.path.abspath(os.path.join(SRC_DIR, "..", "Dataset"))
-    ARTIFACTS_DIR = os.path.join(SRC_DIR, "artifacts")
+    ARTIFACTS_DIR = os.path.abspath(os.path.join(SRC_DIR, "..", "artifacts"))
     os.makedirs(ARTIFACTS_DIR, exist_ok=True)
 
     print(f"Loading {args.dataset} dataset...")

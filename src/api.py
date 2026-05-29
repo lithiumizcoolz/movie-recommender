@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-ARTIFACTS_DIR = Path(__file__).resolve().parent / "artifacts"
+ARTIFACTS_DIR = Path(__file__).resolve().parent.parent / "Demo" / "artifacts"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 TOP_K = 10
 MIN_RATINGS = 5
