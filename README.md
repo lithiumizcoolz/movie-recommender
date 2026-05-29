@@ -1,23 +1,27 @@
-![Demo screen recording](assets/screen-recording-short.gif)
-
 # Introduction
-This movie recommender is an application that uses machine learning of movie rating data to offer personalized movie recommendations. It can be automatically deployed with Docker. The architecture of the movie recommender project is as follows:
+This movie recommender is an application that uses machine learning of movie rating data to offer personalized movie recommendations. It can be automatically deployed with Docker. 
+
+Architecture of the movie recommender app:
 
 ![Architecture diagram](assets/pipeline.png)
 
 # Table of Contents
-- [Data source](#data-source)
-- [Methodology](#methodology)
-- [Installation](#installation)
-- [Project structure](#project-structure)
-- [API](#api)
-- [How to use the movie recommender](#how-to-use-the-movie-recommender)
-- [Analysis of model performance](#analysis-of-model-performance)
-- [Future work](#future-work)
-- [Acknowledgements](#acknowledgements)
+- 🥽[App demo](#app-demo)
+- 📗[Data source](#data-source)
+- 💡[Methodology](#methodology)
+- 🔨[Installation](#installation)
+- 📁[Project structure](#project-structure)
+- 📞[API](#api)
+- 💻[How to use the movie recommender](#how-to-use-the-movie-recommender)
+- 📈[Analysis of model performance](#analysis-of-model-performance)
+- 🔮[Future work](#future-work)
+- 🏅[Acknowledgements](#acknowledgements)
+
+# App demo
+![Demo screen recording](assets/screen-recording-short.gif)
 
 # Data source
-The MovieLens 100K dataset released in April 1998 was used to train the demo model. The dataset can be downloaded from [this link](https://grouplens.org/datasets/movielens/).
+The MovieLens 100K dataset released in April 1998 was used to train the demo model. 
 
 # Methodology
 - **Random negative sampling:** For every user, positive samples are movies that the user has interacted with positively, defined as a rating of at least 3 (out of a total of 5). Negative samples consist of movies with a rating smaller than 3, movies that are unknown to the user, and movies that the user chose not to watch. Negative samples of each user are randomly chosen from the entire training set and used together with positive samples to train the model. This allows the model to more accurately classify positive and negative predictions (recommendations), which improves the robustness of the model compared to purely positive sampling.
@@ -44,7 +48,7 @@ The MovieLens 100K dataset released in April 1998 was used to train the demo mod
 ### Prerequisites
 - Python 3.11+
 - pip package manager
-- Docker (if not, you can manually set up any missing dependencies in `requirements.txt` with the command `pip install <packagename>`)
+- Docker (if not, you can follow the installation instructions in the [End-to-end execution](#end-to-end-execution) section instead)
 
 ### Quick deployment on Docker
 1. Open a shell.
@@ -53,10 +57,10 @@ The MovieLens 100K dataset released in April 1998 was used to train the demo mod
 git clone https://github.com/lithiumizcoolz/movie-recommender.git
 ```
 
-3. Navigate to the location of the `Dockerfile` and build the Docker image.
+3. Navigate to the downloaded repository and build the Docker image.
 ```
-cd movie-recommender/Deployment/Dockerfile
-docker build -t movie-recommender
+cd movie-recommender
+docker build -t movie-recommender -f Deployment/Dockerfile .
 ```
 
 4. Run the container
@@ -67,12 +71,42 @@ docker run -p 8000:8000 movie-recommender
 5. Access the application at `http://localhost:8000/` on your browser.
 
 ### End-to-end execution
-While the demo model is trained on the MovieLens 100K dataset (100K ratings, 1.7K movies, and 1K users), this project is also compatible with the latest small and full MovieLens datasets. Since the full MovieLens dataset is substantially larger (33M ratings, 86K movies, and 300K users as of May 2026), it would take a much longer time to train the model. To try out training on this dataset, you can download the updated full dataset and sample a fraction of it when training the model. Refer to `demo.ipynb` for a demonstration of the end-to-end execution of the Movie Recommender app using the demo model.
+Refer to `demo.ipynb` for a demonstration of the end-to-end execution of the Movie Recommender app using the demo model. In the following instructions, we will go through the steps from downloading a dataset of your choice to deploying the movie recommender app.
 
-**1. Update dataset**
+While the demo model is trained on the MovieLens 100K dataset (100K ratings, 1.7K movies, and 1K users), this project is also compatible with the latest small and full MovieLens datasets. Since the full MovieLens dataset is substantially larger (33M ratings, 86K movies, and 300K users as of May 2026), it would take a much longer time to train the model. To try out training on this dataset, you can download the updated full dataset and sample a fraction of it when training the model. 
 
-Here, we download the updated full MovieLens dataset by entering this command into Anaconda Prompt:
+**1. Open a shell.**
+
+**2. Clone the git repository**
 ```
+git clone https://github.com/lithiumizcoolz/movie-recommender.git
+```
+
+**3. Create virtual environment**
+```
+python -m venv venv
+```
+
+**4. Activate virtual environment**
+```
+# Windows
+venv\Scripts\activate
+# MacOS/Linux
+source venv/bin/activate
+```
+
+**5. Install dependencies**
+```
+pip install -r Deployment/requirements.txt 
+```
+
+**6. Update dataset**
+
+If you want to use the 100K dataset, you can skip this step because the dataset is already in the folder `Dataset/ml-100k/`. 
+
+Download the latest full MovieLens dataset, or update an existing latest full MovieLens dataset by running this command:
+```
+cd src
 python update_data.py
 ```
 
@@ -81,7 +115,7 @@ Expected output:
 Downloading https://files.grouplens.org/datasets/movielens/ml-latest.zip to YourChosenLocation\Movie Recommender\Dataset\ml-latest.zip...
 [==============================] 100.0% (334.6MB / 334.6MB)
 Download complete.
-Extracting YOurChosenLocation\Movie Recommender\Dataset\ml-latest.zip...
+Extracting YourChosenLocation\Movie Recommender\Dataset\ml-latest.zip...
 Extraction complete.
 Successfully updated dataset in the location: YourChosenLocation\Movie Recommender\Dataset\ml-latest
 ```
@@ -92,9 +126,9 @@ python update_data.py --small
 ```
 
 
-**2. Model training**
+**7. Model training**
 
-Train the model on the updated dataset. The training loss, validation loss, and performance metrics at each epoch will be displayed.
+Train the model on a dataset of your choice. Here, we use the latest full MovieLens dataset. The training loss, validation loss, and performance metrics at each epoch will be displayed.
 ```
 python train.py --dataset ml-latest --sample-fraction 0.003
 ```
@@ -138,7 +172,7 @@ Use the `-h` flag to view other available flags. You can configure the model tra
                         (useful for large datasets). Default = 1.0
 ```
 
-**3. Load app**
+**8. Load app**
 
 Run the Uvicorn web server.
 ```
@@ -163,7 +197,7 @@ Ctrl+click on the link given in the output. The app will appear in your browser.
 ```
 movie-recommender/
 │
-├── README.md               # This file: overview and installation instructions
+├── README.md               # This file: introduction and installation
 ├── Demo/
 │   ├── demo.ipynb          # Demonstration and analysis of model training
 │   ├── best_model.pt       # Saved model from demo.ipynb trained on ml-100k dataset
@@ -178,14 +212,6 @@ movie-recommender/
 │   ├── ml-100k/
 │   │   ├── u.data        # Dataset used for training
 │   │   └── u.item        # Data for mapping between movie IDs and movies
-│   │
-│   ├── ml-latest-small/
-│   │   ├── ratings.csv   # Dataset used for training
-│   │   └── movies.csv    # Data for mapping between movie IDs and movies
-│   │
-│   └── ml-100k/
-│       ├── ratings.csv   # Dataset used for training
-│       └── movies.csv    # Data for mapping between movie IDs and movies
 │
 ├── src/
 │   ├── static/
@@ -218,7 +244,7 @@ POST /recommend # Performs "cold-start" calculations on the new user's ratings a
 2. Scroll through the list of movies and rate the movies you have watched before by clicking on the appropriate number of stars. Alternatively, you can enter their titles into the search bar.
 3. The movie recommender requires you to rate at least 5 movies before giving its recommendations. Once you have rated 5 or more movies, click the "GET MY RECOMMENDATIONS" button.
 4. Scroll down the page to view the top 10 movies selected by the movie recommender.
-5. Enjoy the movies! 
+5. Enjoy the movies! 🍿
 
 # Analysis of model performance
 After training the model on the MovieLens 100K dataset, we assess the model's performance on the test set through the Precision, Recall, and NCDG metrics. The metrics range from 0 (worst) to 1 (perfect). The metrics for the random recommendations case were computed from the pre-trained training set.
@@ -239,9 +265,9 @@ After training the model on the MovieLens 100K dataset, we assess the model's pe
 
 # Future work
 The predictive accuracy of the model can be enhanced with these methods:
-- **Deeper neural network:** Enable learning of non-linear interactions, which are more realistic.
-- **Train on more user and item features:** Relevant features such as age, gender, genre, and acting cast may have significant contributions to movie preferences. Implementing these features into the model can result in more accurate predictions.
-- **Increase negative samples:** Allows model to more accurately discern the boundaries between positive and negative interactions after training.
+- ✨**Deeper neural network:** Enable learning of non-linear interactions, which are more realistic.
+- ✨**Train on more user and item features:** Relevant features such as age, gender, genre, and acting cast may have significant contributions to movie preferences. Implementing these features into the model can result in more accurate predictions.
+- ✨**Increase negative samples:** Allows model to more accurately discern the boundaries between positive and negative interactions after training.
 
 # Acknowledgements
 - Datasets provided by MovieLens.
