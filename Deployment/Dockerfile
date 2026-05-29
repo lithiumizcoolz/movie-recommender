@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY src/ ./src/
 
 # Copy ml-100k-dataset if it's needed at runtime
-COPY Dataset/ml-100k-dataset/ ./ml-100k-dataset/
+COPY Dataset/ml-100k/ ./ml-100k/
 
 # Change to src directory so api.py paths are relative to there
 WORKDIR /app/src
