@@ -19,11 +19,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir uvicorn
 
-# Copy entire src directory (includes api.py, artifacts/, static/)
+# Copy src and Demo/artifacts directories
 COPY src/ ./src/
-
-# Copy ml-100k-dataset if it's needed at runtime
-COPY Dataset/ml-100k/ ./ml-100k/
+COPY Demo/artifacts/ ./Demo/artifacts/
 
 # Change to src directory so api.py paths are relative to there
 WORKDIR /app/src
