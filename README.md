@@ -249,11 +249,11 @@ POST /recommend # Performs "cold-start" calculations on the new user's ratings a
 # Analysis of model performance
 After training the model on the MovieLens 100K dataset, we assess the model's performance on the test set through the Precision, Recall, and NCDG metrics. The metrics range from 0 (worst) to 1 (perfect). The metrics for the random recommendations case were computed from the pre-trained training set.
 
-**Precision@K:** Proportion of correctly classified positive ratings out of the $K$ items the model recommended.
+**Precision@K:** Proportion of correctly classified positive ratings out of the *K* items the model recommended.
 
-**Recall@K:** Proportion of the user's ground-truth items (movies the user actually liked) that appeared in the top-$K$ recommended list, out of all the user's ground-truth items in the test set.
+**Recall@K:** Proportion of the user's ground-truth items (movies the user actually liked) that appeared in the top-*K* recommended list, out of all the user's ground-truth items in the test set.
 
-**NDCG@K:** Normalized discounted cumulative gain (NDCG) measures the ranking quality of recommended items. Cumulative Gain (CG) adds up the relevance scores of the recommended items. Discounted Cumulative Gain (DCG) penalizes highly relevant items being ranked lower on the top-$K$ recommendation list. NDCG divides the DCG score by the ideal DCG (IDCG) score, which describes what the score would be if the system ranked all items correctly.
+**NDCG@K:** Normalized discounted cumulative gain (NDCG) measures the ranking quality of recommended items. Cumulative Gain (CG) adds up the relevance scores of the recommended items. Discounted Cumulative Gain (DCG) penalizes highly relevant items being ranked lower on the top-*K* recommendation list. NDCG divides the DCG score by the ideal DCG (IDCG) score, which describes what the score would be if the system ranked all items correctly.
 
 | Metrics     | Random       | This project |
 | ----------- | ------------ | ------------ |
