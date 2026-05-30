@@ -272,5 +272,6 @@ The predictive accuracy of the model can be enhanced with these methods:
 # Acknowledgements
 - Datasets provided by MovieLens.
 - Project was developed with pandas, scikit-learn, PyTorch, and FastAPI libraries.
+- Boilerplate code generation was AI-assisted by Antigravity.
 
 
