@@ -101,13 +101,17 @@ source venv/bin/activate
 pip install -r Deployment/requirements.txt 
 ```
 
-**6. Update dataset**
+**6. Go to src/ folder**
+```
+cd src
+```
+
+**7. Update dataset**
 
 If you want to use the 100K dataset, you can skip this step because the dataset is already in the folder `Dataset/ml-100k/`. 
 
 Download the latest full MovieLens dataset, or update an existing latest full MovieLens dataset by running this command:
 ```
-cd src
 python update_data.py
 ```
 
