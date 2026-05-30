@@ -177,7 +177,7 @@ Use the `-h` flag to view other available flags. You can configure the model tra
 
 Run the Uvicorn web server.
 ```
-uvicorn api:app --reload
+python -m uvicorn api:app --reload
 ```
 Expected output:
 ```
