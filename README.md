@@ -80,6 +80,7 @@ While the demo model is trained on the MovieLens 100K dataset (100K ratings, 1.7
 **2. Clone the git repository**
 ```
 git clone https://github.com/lim-li-xuan-phy/movie-recommender.git
+cd movie-recommender
 ```
 
 **3. Create virtual environment**
