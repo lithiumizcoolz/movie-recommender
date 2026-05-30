@@ -98,15 +98,11 @@ source venv/bin/activate
 
 **5. Install dependencies**
 ```
-pip install -r Deployment/requirements.txt 
-```
-
-**6. Go to src/ folder**
-```
+pip install -r Deployment/requirements.txt
 cd src
 ```
 
-**7. Update dataset**
+**6. Update dataset**
 
 If you want to use the 100K dataset, you can skip this step because the dataset is already in the folder `Dataset/ml-100k/`. 
 
@@ -129,7 +125,6 @@ Add the `--small` flag to download the latest small MovieLens dataset instead.
 ```
 python update_data.py --small
 ```
-
 
 **7. Model training**
 
